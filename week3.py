@@ -79,6 +79,17 @@ print(
     ].head()
 )
 
+print(sold.memory_usage(deep=True).sum() / 1024**2, "MB")
+print(listings.memory_usage(deep=True).sum() / 1024**2, "MB")
 # Save files
-sold.to_csv("week3_sold_with_rates.csv", index=False)
-listings.to_csv("week3_listings_with_rates.csv", index=False)
+sold.to_csv(
+    "week3_sold_with_rates.csv.gz",
+    index=False,
+    compression="gzip"
+)
+
+listings.to_csv(
+    "week3_listings_with_rates.csv.gz",
+    index=False,
+    compression="gzip"
+)

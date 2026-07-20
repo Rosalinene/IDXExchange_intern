@@ -2,9 +2,11 @@
 import pandas as pd
 
 # Load datasets
-listings = pd.read_csv("week3_listings_with_rates.csv", low_memory=False)
-sold = pd.read_csv("week3_sold_with_rates.csv", low_memory=False)
+listings = pd.read_csv("week3_listings_with_rates.csv.gz", low_memory=False)
+sold = pd.read_csv("week3_sold_with_rates.csv.gz", low_memory=False)
 
+sold_before = len(sold)
+listings_before = len(listings)
 # Convert date columns
 date_columns = [
     "CloseDate",
@@ -56,6 +58,28 @@ for col in numeric_columns:
             errors="coerce"
         )
 
+#Fill missing values
+fill_columns = [
+    "LivingArea",
+    "LotSizeAcres",
+    "BedroomsTotal",
+    "BathroomsTotalInteger",
+    "DaysOnMarket",
+    "YearBuilt"
+]
+
+for col in fill_columns:
+
+    if col in sold.columns:
+        sold[col] = sold[col].fillna(
+            sold[col].median()
+        )
+
+    if col in listings.columns:
+        listings[col] = listings[col].fillna(
+            listings[col].median()
+        )
+        
 # Remove invalid values
 sold_before = len(sold)
 
@@ -83,30 +107,7 @@ listings = listings[
 print("Invalid listing rows removed:",
       listings_before - len(listings))
 
-# Fill missing values
-fill_columns = [
-    "LivingArea",
-    "LotSizeAcres",
-    "BedroomsTotal",
-    "BathroomsTotalInteger",
-    "DaysOnMarket",
-    "YearBuilt"
-]
-
-for col in fill_columns:
-
-    if col in sold.columns:
-        sold[col] = sold[col].fillna(
-            sold[col].median()
-        )
-
-    if col in listings.columns:
-        listings[col] = listings[col].fillna(
-            listings[col].median()
-        )
-
 # Remove duplicate rows
-
 sold_duplicates = sold.duplicated().sum()
 listing_duplicates = listings.duplicated().sum()
 
@@ -131,14 +132,82 @@ listings.drop(
     inplace=True
 )
 
+# Date consistency flags
+for df in [sold, listings]:
+
+    if (
+        "ListingContractDate" in df.columns and
+        "CloseDate" in df.columns
+    ):
+        df["listing_after_close_flag"] = (
+            df["ListingContractDate"] >
+            df["CloseDate"]
+        )
+
+    if (
+        "PurchaseContractDate" in df.columns and
+        "CloseDate" in df.columns
+    ):
+        df["purchase_after_close_flag"] = (
+            df["PurchaseContractDate"] >
+            df["CloseDate"]
+        )
+
+    if (
+        "ListingContractDate" in df.columns and
+        "PurchaseContractDate" in df.columns
+    ):
+        df["negative_timeline_flag"] = (
+            df["PurchaseContractDate"] <
+            df["ListingContractDate"]
+        )
+        
+# Geographic quality flags
+for df in [sold, listings]:
+
+    if (
+        "Latitude" in df.columns and
+        "Longitude" in df.columns
+    ):
+
+        df["missing_coordinates_flag"] = (
+            df["Latitude"].isna() |
+            df["Longitude"].isna()
+        )
+
+        df["zero_coordinates_flag"] = (
+            (df["Latitude"] == 0) |
+            (df["Longitude"] == 0)
+        )
+
+        df["positive_longitude_flag"] = (
+            df["Longitude"] > 0
+        )
+
+        df["invalid_coordinate_flag"] = (
+            (df["Latitude"] < 32) |
+            (df["Latitude"] > 42) |
+            (df["Longitude"] < -125) |
+            (df["Longitude"] > -114)
+        )
+        
+        
 # Final summary
-print("Data after cleaning")
+print("\n========== ROW COUNTS ==========")
 
-print("Listings rows:", len(listings))
-print("Sold rows:", len(sold))
+print("Sold before cleaning:", sold_before)
+print("Sold after cleaning :", len(sold))
 
-print("\nRemaining Missing Values (Top 20)")
+print("Listings before cleaning:", listings_before)
+print("Listings after cleaning :", len(listings))
 
+print("\nDuplicates removed")
+print("Sold:", sold_duplicates)
+print("Listings:", listing_duplicates)
+
+print("\n========== MISSING VALUES ==========")
+
+print("\nSold")
 print(
     sold.isnull()
     .sum()
@@ -146,9 +215,45 @@ print(
     .head(20)
 )
 
-print("\nFinal Data Types")
+print("\nListings")
+print(
+    listings.isnull()
+    .sum()
+    .sort_values(ascending=False)
+    .head(20)
+)
 
+print("\n-------- DATA TYPES ----------")
+
+print("\nSold")
 print(sold.dtypes)
+
+print("\nListings")
+print(listings.dtypes)
+
+print("\n--------- DATE CONSISTENCY ----------")
+
+for flag in [
+    "listing_after_close_flag",
+    "purchase_after_close_flag",
+    "negative_timeline_flag"
+]:
+
+    if flag in sold.columns:
+        print(flag, ":", sold[flag].sum())
+
+print("\n--------- GEOGRAPHIC QUALITY ------------")
+
+for flag in [
+    "missing_coordinates_flag",
+    "zero_coordinates_flag",
+    "positive_longitude_flag",
+    "invalid_coordinate_flag"
+]:
+
+    if flag in sold.columns:
+        print(flag, ":", sold[flag].sum())
+        
 # Save files
 sold.to_csv(
     "week4_sold_cleaned.csv",

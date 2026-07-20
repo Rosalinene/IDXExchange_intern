@@ -1,3 +1,4 @@
 csv/*
 pdf/*
 *.csv
+*.csv.gz
